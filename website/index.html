@@ -13,6 +13,18 @@
             <h1 class="text-3xl font-bold text-gray-800">Darko's Old Computers Database 💾</h1>
             <p class="text-gray-600 mt-2">View query results from <span class="font-bold drop-shadow-[0px_0px_4px_rgba(255,120,0,1)]">Amazon Aurora DSQL</span></p>
             <p class="text-xs text-gray-400 mt-2">ℹ️PLEASE NOTE: This is not a comprehensive list, just something I managed to stick in a Database</p>
+            
+            <div class="mt-4 flex items-center">
+                <span class="mr-3 text-sm font-medium text-gray-700">Implementation:</span>
+                <label for="toggle-rust-python" class="inline-flex items-center cursor-pointer">
+                    <span class="mr-3 text-sm font-medium text-orange-500">Rust</span>
+                    <div class="relative">
+                        <input type="checkbox" id="toggle-rust-python" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </div>
+                    <span class="ml-3 text-sm font-medium text-blue-600">Python</span>
+                </label>
+            </div>
         </header>
 
         <div class="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -94,6 +106,7 @@
             const loadingSpinner = document.getElementById('loadingSpinner');
             const errorMessage = document.getElementById('errorMessage');
             const errorText = document.getElementById('errorText');
+            const toggleRustPython = document.getElementById('toggle-rust-python');
 
             // Populate the year dropdown with years from 1977 to 1997
             for (let year = 1977; year <= 1997; year++) {
@@ -106,7 +119,7 @@
             // Fetch CPU architectures and populate the dropdown
             fetchCPUArchitectures();
 
-            // Set up event listeners for buttons
+            // Set up event listeners for buttons and toggle
             getAllComputersButton.addEventListener('click', () => fetchDataWithQuery('all_computers'));
             getManufStatsButton.addEventListener('click', () => fetchDataWithQuery('manuf_stats'));
             yearSelect.addEventListener('change', () => {
@@ -137,13 +150,36 @@
                 }
             });
             clearButton.addEventListener('click', clearResults);
+            
+            // Add event listener for the toggle switch
+            toggleRustPython.addEventListener('change', () => {
+                // Refresh the current view with the new implementation
+                if (yearSelect.value) {
+                    fetchDataWithQueryAndYear('year_stats', yearSelect.value);
+                } else if (cpuSelect.value) {
+                    fetchDataWithQueryAndCPU('cpu_computers', cpuSelect.value);
+                } else if (searchInput.value.trim()) {
+                    fetchDataWithSearch(searchInput.value.trim());
+                } else {
+                    fetchDataWithQuery('all_computers');
+                }
+                
+                // Also refresh the CPU architectures dropdown
+                fetchCPUArchitectures();
+            });
 
             // Automatically fetch all computers data when the page loads
             fetchDataWithQuery('all_computers');
 
+            function getBaseUrl() {
+                // Return the appropriate base URL based on the toggle state
+                const isPython = toggleRustPython.checked;
+                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/";
+                return baseUrl + (isPython ? "python" : "rust");
+            }
+
             function fetchCPUArchitectures() {
-                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/rust";
-                const apiUrl = `${baseUrl}?query=cpus`;
+                const apiUrl = `${getBaseUrl()}?query=cpus`;
                 
                 fetch(apiUrl)
                     .then(response => {
@@ -183,8 +219,7 @@
             }
 
             function fetchDataWithQuery(queryValue) {
-                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/rust";
-                const apiUrl = `${baseUrl}?query=${encodeURIComponent(queryValue)}`;
+                const apiUrl = `${getBaseUrl()}?query=${encodeURIComponent(queryValue)}`;
                 
                 // Show loading spinner
                 loadingSpinner.classList.remove('hidden');
@@ -209,8 +244,7 @@
             }
 
             function fetchDataWithQueryAndYear(queryValue, year) {
-                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/rust";
-                const apiUrl = `${baseUrl}?query=${encodeURIComponent(queryValue)}&year=${encodeURIComponent(year)}`;
+                const apiUrl = `${getBaseUrl()}?query=${encodeURIComponent(queryValue)}&year=${encodeURIComponent(year)}`;
                 
                 // Show loading spinner
                 loadingSpinner.classList.remove('hidden');
@@ -235,8 +269,7 @@
             }
 
             function fetchDataWithQueryAndCPU(queryValue, cpu) {
-                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/rust";
-                const apiUrl = `${baseUrl}?query=${encodeURIComponent(queryValue)}&cpu=${encodeURIComponent(cpu)}`;
+                const apiUrl = `${getBaseUrl()}?query=${encodeURIComponent(queryValue)}&cpu=${encodeURIComponent(cpu)}`;
                 
                 // Show loading spinner
                 loadingSpinner.classList.remove('hidden');
@@ -261,8 +294,7 @@
             }
             
             function fetchDataWithSearch(searchTerm) {
-                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/rust";
-                const apiUrl = `${baseUrl}?query=search&term=${encodeURIComponent(searchTerm)}`;
+                const apiUrl = `${getBaseUrl()}?query=search&term=${encodeURIComponent(searchTerm)}`;
                 
                 // Show loading spinner
                 loadingSpinner.classList.remove('hidden');
