@@ -28,13 +28,21 @@ export class DistributedQueryStack extends cdk.Stack {
       resources: ["*"]
     }))
 
-    // Create API Gateway
+    // Create API Gateway with CORS enabled
     const api = new apigateway.RestApi(this, 'DistributedQueryApi', {
       restApiName: 'Distributed Query Service',
       description: 'This service provides SQL database read functionality',
       deployOptions: {
         stageName: 'prod',
       },
+      // Enable CORS for all origins (for testing purposes only)
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: apigateway.Cors.DEFAULT_HEADERS,
+        allowCredentials: true,
+        maxAge: cdk.Duration.days(1)
+      }
     });
 
     // Create /read resource

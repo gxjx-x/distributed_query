@@ -1,0 +1,317 @@
+{
+  "database": {
+    "name": "computer_database",
+    "description": "Historical computer systems database (1975-1997)",
+    "version": "1.0.0",
+    "created": "2025-01-29",
+    "tables": {
+      "manufacturers": {
+        "description": "Computer manufacturer information",
+        "columns": {
+          "id": {
+            "type": "UUID",
+            "primary_key": true,
+            "nullable": false,
+            "default": "gen_random_uuid()",
+            "description": "Unique identifier"
+          },
+          "name": {
+            "type": "VARCHAR(50)",
+            "nullable": false,
+            "unique": true,
+            "description": "Manufacturer name"
+          },
+          "country": {
+            "type": "VARCHAR(50)",
+            "nullable": true,
+            "description": "Country of origin"
+          },
+          "founded_year": {
+            "type": "INTEGER",
+            "nullable": true,
+            "description": "Year company was founded"
+          },
+          "description": {
+            "type": "TEXT",
+            "nullable": true,
+            "description": "Brief company description"
+          }
+        },
+        "indexes": [
+          {
+            "name": "idx_manufacturers_name",
+            "columns": ["name"],
+            "unique": true
+          }
+        ],
+        "sample_data": [
+          {"name": "Apple", "country": "USA", "founded_year": 1976},
+          {"name": "IBM", "country": "USA", "founded_year": 1911},
+          {"name": "Commodore", "country": "USA", "founded_year": 1954}
+        ],
+        "row_count_estimate": 70
+      },
+      "cpu_families": {
+        "description": "CPU/processor information",
+        "columns": {
+          "id": {
+            "type": "UUID",
+            "primary_key": true,
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "family_name": {
+            "type": "VARCHAR(50)",
+            "nullable": false,
+            "description": "CPU model name"
+          },
+          "manufacturer": {
+            "type": "VARCHAR(50)",
+            "nullable": false,
+            "description": "CPU manufacturer"
+          },
+          "architecture": {
+            "type": "VARCHAR(20)",
+            "nullable": false,
+            "description": "CPU architecture type",
+            "enum_values": ["8-bit", "16-bit", "16/32-bit", "32-bit", "64-bit"]
+          },
+          "instruction_set": {
+            "type": "VARCHAR(20)",
+            "nullable": false,
+            "description": "Instruction set type",
+            "enum_values": ["CISC", "RISC"]
+          },
+          "bit_width": {
+            "type": "INTEGER",
+            "nullable": true,
+            "description": "CPU bit width"
+          },
+          "introduction_year": {
+            "type": "INTEGER",
+            "nullable": true,
+            "description": "Year CPU was introduced"
+          }
+        },
+        "indexes": [
+          {
+            "name": "idx_cpu_families_architecture",
+            "columns": ["architecture"]
+          }
+        ],
+        "sample_data": [
+          {"family_name": "Intel 8080", "manufacturer": "Intel", "architecture": "8-bit", "instruction_set": "CISC"},
+          {"family_name": "Zilog Z80", "manufacturer": "Zilog", "architecture": "8-bit", "instruction_set": "CISC"},
+          {"family_name": "MOS 6502", "manufacturer": "MOS", "architecture": "8-bit", "instruction_set": "CISC"}
+        ],
+        "row_count_estimate": 50
+      },
+      "storage_types": {
+        "description": "Storage technologies used in computers",
+        "columns": {
+          "id": {
+            "type": "UUID",
+            "primary_key": true,
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "type_name": {
+            "type": "VARCHAR(30)",
+            "nullable": false,
+            "unique": true,
+            "description": "Storage type name"
+          },
+          "description": {
+            "type": "TEXT",
+            "nullable": true,
+            "description": "Description of storage technology"
+          },
+          "typical_capacity_range": {
+            "type": "VARCHAR(50)",
+            "nullable": true,
+            "description": "Typical capacity range"
+          }
+        },
+        "sample_data": [
+          {"type_name": "Cassette Tape", "description": "Magnetic tape storage for home computers", "typical_capacity_range": "1KB-100KB"},
+          {"type_name": "Floppy Disk", "description": "Removable magnetic disk storage", "typical_capacity_range": "160KB-1.44MB"},
+          {"type_name": "Hard Disk", "description": "Fixed magnetic disk storage", "typical_capacity_range": "5MB-1GB+"}
+        ],
+        "row_count_estimate": 10
+      },
+      "computer_categories": {
+        "description": "Classification of computer types",
+        "columns": {
+          "id": {
+            "type": "UUID",
+            "primary_key": true,
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "category_name": {
+            "type": "VARCHAR(30)",
+            "nullable": false,
+            "unique": true,
+            "description": "Category name"
+          },
+          "description": {
+            "type": "TEXT",
+            "nullable": true,
+            "description": "Category description"
+          }
+        },
+        "sample_data": [
+          {"category_name": "Home Computer", "description": "Consumer computers for personal/family use"},
+          {"category_name": "Business Computer", "description": "Professional computers for office work"},
+          {"category_name": "Workstation", "description": "High-performance computers for technical work"}
+        ],
+        "row_count_estimate": 6
+      },
+      "computers": {
+        "description": "Main table containing all computer systems",
+        "columns": {
+          "id": {
+            "type": "UUID",
+            "primary_key": true,
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "model": {
+            "type": "VARCHAR(50)",
+            "nullable": false,
+            "description": "Computer model name"
+          },
+          "manufacturer_id": {
+            "type": "UUID",
+            "nullable": true,
+            "foreign_key": {
+              "table": "manufacturers",
+              "column": "id"
+            },
+            "description": "Reference to manufacturer"
+          },
+          "year": {
+            "type": "INTEGER",
+            "nullable": false,
+            "description": "Year of introduction/release",
+            "min_value": 1975,
+            "max_value": 1997
+          },
+          "ram_kb": {
+            "type": "INTEGER",
+            "nullable": false,
+            "description": "RAM capacity in kilobytes",
+            "min_value": 1,
+            "max_value": 262144
+          },
+          "cpu_family_id": {
+            "type": "UUID",
+            "nullable": true,
+            "foreign_key": {
+              "table": "cpu_families",
+              "column": "id"
+            },
+            "description": "Reference to CPU family"
+          },
+          "storage_type_id": {
+            "type": "UUID",
+            "nullable": true,
+            "foreign_key": {
+              "table": "storage_types",
+              "column": "id"
+            },
+            "description": "Reference to storage type"
+          },
+          "category_id": {
+            "type": "UUID",
+            "nullable": true,
+            "foreign_key": {
+              "table": "computer_categories",
+              "column": "id"
+            },
+            "description": "Reference to category"
+          }
+        },
+        "indexes": [
+          {
+            "name": "idx_computers_year",
+            "columns": ["year"]
+          },
+          {
+            "name": "idx_computers_manufacturer",
+            "columns": ["manufacturer_id"]
+          },
+          {
+            "name": "idx_computers_cpu",
+            "columns": ["cpu_family_id"]
+          }
+        ],
+        "sample_data": [
+          {"model": "Apple II", "year": 1977, "ram_kb": 4, "manufacturer": "Apple", "cpu": "MOS 6502"},
+          {"model": "IBM PC", "year": 1981, "ram_kb": 16, "manufacturer": "IBM", "cpu": "Intel 8088"},
+          {"model": "Commodore 64", "year": 1982, "ram_kb": 64, "manufacturer": "Commodore", "cpu": "MOS 6502"}
+        ],
+        "row_count_estimate": 180
+      }
+    },
+    "relationships": [
+      {
+        "name": "computers_manufacturer_fk",
+        "from_table": "computers",
+        "from_column": "manufacturer_id",
+        "to_table": "manufacturers",
+        "to_column": "id",
+        "relationship_type": "many_to_one"
+      },
+      {
+        "name": "computers_cpu_family_fk",
+        "from_table": "computers",
+        "from_column": "cpu_family_id",
+        "to_table": "cpu_families",
+        "to_column": "id",
+        "relationship_type": "many_to_one"
+      },
+      {
+        "name": "computers_storage_type_fk",
+        "from_table": "computers",
+        "from_column": "storage_type_id",
+        "to_table": "storage_types",
+        "to_column": "id",
+        "relationship_type": "many_to_one"
+      },
+      {
+        "name": "computers_category_fk",
+        "from_table": "computers",
+        "from_column": "category_id",
+        "to_table": "computer_categories",
+        "to_column": "id",
+        "relationship_type": "many_to_one"
+      }
+    ],
+    "common_queries": [
+      {
+        "name": "popular_manufacturers",
+        "description": "Get manufacturers by system count",
+        "sql": "SELECT m.name, COUNT(*) as system_count FROM computers c JOIN manufacturers m ON c.manufacturer_id = m.id GROUP BY m.name ORDER BY system_count DESC"
+      },
+      {
+        "name": "cpu_evolution",
+        "description": "CPU architecture timeline",
+        "sql": "SELECT cf.architecture, MIN(c.year) as first_year, MAX(c.year) as last_year, COUNT(*) as systems FROM computers c JOIN cpu_families cf ON c.cpu_family_id = cf.id GROUP BY cf.architecture ORDER BY first_year"
+      },
+      {
+        "name": "computing_power_growth",
+        "description": "RAM growth over time",
+        "sql": "SELECT year, AVG(ram_kb) as avg_ram, MAX(ram_kb) as max_ram, COUNT(*) as systems FROM computers GROUP BY year ORDER BY year"
+      }
+    ],
+    "metadata": {
+      "total_tables": 5,
+      "total_relationships": 4,
+      "data_period": "1975-1997",
+      "primary_categories": ["Home Computer", "Business Computer", "Workstation", "Server", "Portable", "Hobbyist Kit"],
+      "cpu_architectures": ["8-bit", "16-bit", "16/32-bit", "32-bit", "64-bit"],
+      "major_manufacturers": ["Apple", "IBM", "Commodore", "Sun", "Silicon Graphics", "DEC", "HP"]
+    }
+  }
+}

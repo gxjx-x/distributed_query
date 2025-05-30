@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Query Results</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Darko's Old Computers Database 💾</h1>
+            <p class="text-gray-600 mt-2">View query results from <span class="font-bold drop-shadow-[0px_0px_4px_rgba(255,120,0,1)]">Amazon Aurora DSQL</span></p>
+            <p class="text-xs text-gray-400 mt-2">ℹ️PLEASE NOTE: This is not a comprehensive list, just something I managed to stick in a Database</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex flex-wrap gap-4 mb-4">
+                <button id="getAllComputersButton" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
+                    Get All Computers
+                </button>
+                <button id="getManufStatsButton" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors">
+                    Manufacturer Stats
+                </button>
+                
+                <div class="flex items-center">
+                    <label for="yearSelect" class="mr-2 text-gray-700">Computers by year:</label>
+                    <select id="yearSelect" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select Year</option>
+                        <!-- Years will be populated by JavaScript -->
+                    </select>
+                </div>
+                
+                <div class="flex items-center">
+                    <label for="cpuSelect" class="mr-2 text-gray-700">CPU Architecture:</label>
+                    <select id="cpuSelect" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select CPU</option>
+                        <!-- CPU options will be populated by JavaScript -->
+                    </select>
+                </div>
+                
+                <button id="clearButton" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md transition-colors">
+                    Clear Results
+                </button>
+                <div class="flex-grow"></div>
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 hidden" id="loadingSpinner"></div>
+            </div>
+            
+            <div class="flex w-full mt-4">
+                <input type="text" id="searchInput" placeholder="Search computers..." 
+                       class="flex-grow p-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button id="searchButton" class="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-r-md transition-colors">
+                    Search
+                </button>
+            </div>
+        </div>
+
+        <div id="errorMessage" class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 hidden">
+            <p id="errorText"></p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr id="tableHeader">
+                            <!-- Table headers will be dynamically inserted here -->
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Table rows will be dynamically inserted here -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="noData" class="p-8 text-center text-gray-500">
+                Loading data...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const getAllComputersButton = document.getElementById('getAllComputersButton');
+            const getManufStatsButton = document.getElementById('getManufStatsButton');
+            const yearSelect = document.getElementById('yearSelect');
+            const cpuSelect = document.getElementById('cpuSelect');
+            const searchInput = document.getElementById('searchInput');
+            const searchButton = document.getElementById('searchButton');
+            const clearButton = document.getElementById('clearButton');
+            const tableHeader = document.getElementById('tableHeader');
+            const tableBody = document.getElementById('tableBody');
+            const noData = document.getElementById('noData');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const errorMessage = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+
+            // Populate the year dropdown with years from 1977 to 1997
+            for (let year = 1977; year <= 1997; year++) {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearSelect.appendChild(option);
+            }
+
+            // Fetch CPU architectures and populate the dropdown
+            fetchCPUArchitectures();
+
+            // Set up event listeners for buttons
+            getAllComputersButton.addEventListener('click', () => fetchDataWithQuery('all_computers'));
+            getManufStatsButton.addEventListener('click', () => fetchDataWithQuery('manuf_stats'));
+            yearSelect.addEventListener('change', () => {
+                const selectedYear = yearSelect.value;
+                if (selectedYear) {
+                    fetchDataWithQueryAndYear('year_stats', selectedYear);
+                }
+            });
+            cpuSelect.addEventListener('change', () => {
+                const selectedCPU = cpuSelect.value;
+                if (selectedCPU) {
+                    fetchDataWithQueryAndCPU('cpu_computers', selectedCPU);
+                }
+            });
+            searchButton.addEventListener('click', () => {
+                const searchTerm = searchInput.value.trim();
+                if (searchTerm) {
+                    fetchDataWithSearch(searchTerm);
+                }
+            });
+            // Allow pressing Enter in the search field to trigger search
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const searchTerm = searchInput.value.trim();
+                    if (searchTerm) {
+                        fetchDataWithSearch(searchTerm);
+                    }
+                }
+            });
+            clearButton.addEventListener('click', clearResults);
+
+            // Automatically fetch all computers data when the page loads
+            fetchDataWithQuery('all_computers');
+
+            function fetchCPUArchitectures() {
+                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/rust";
+                const apiUrl = `${baseUrl}?query=cpus`;
+                
+                fetch(apiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        
+                        if (Array.isArray(data)) {
+                            // Clear existing options except the first one
+                            while (cpuSelect.options.length > 1) {
+                                cpuSelect.remove(1);
+                            }
+                            
+                            // Sort CPU architectures alphabetically
+                            const sortedCPUs = [...data].sort((a, b) => a.localeCompare(b));
+                            
+                            // Add each CPU to the dropdown
+                            sortedCPUs.forEach(cpuName => {
+                                if (cpuName) {
+                                    const option = document.createElement('option');
+                                    option.value = cpuName;
+                                    option.textContent = cpuName;
+                                    cpuSelect.appendChild(option);
+                                }
+                            });
+                            
+                        } else {
+                            console.error("Unexpected data format for CPUs:", data);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching CPU architectures:', error);
+                    });
+            }
+
+            function fetchDataWithQuery(queryValue) {
+                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/rust";
+                const apiUrl = `${baseUrl}?query=${encodeURIComponent(queryValue)}`;
+                
+                // Show loading spinner
+                loadingSpinner.classList.remove('hidden');
+                errorMessage.classList.add('hidden');
+                
+                fetch(apiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        displayData(data);
+                        loadingSpinner.classList.add('hidden');
+                    })
+                    .catch(error => {
+                        console.error('Error fetching data:', error);
+                        showError(`Error fetching data: ${error.message}`);
+                        loadingSpinner.classList.add('hidden');
+                    });
+            }
+
+            function fetchDataWithQueryAndYear(queryValue, year) {
+                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/rust";
+                const apiUrl = `${baseUrl}?query=${encodeURIComponent(queryValue)}&year=${encodeURIComponent(year)}`;
+                
+                // Show loading spinner
+                loadingSpinner.classList.remove('hidden');
+                errorMessage.classList.add('hidden');
+                
+                fetch(apiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        displayData(data);
+                        loadingSpinner.classList.add('hidden');
+                    })
+                    .catch(error => {
+                        console.error('Error fetching data:', error);
+                        showError(`Error fetching data: ${error.message}`);
+                        loadingSpinner.classList.add('hidden');
+                    });
+            }
+
+            function fetchDataWithQueryAndCPU(queryValue, cpu) {
+                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/rust";
+                const apiUrl = `${baseUrl}?query=${encodeURIComponent(queryValue)}&cpu=${encodeURIComponent(cpu)}`;
+                
+                // Show loading spinner
+                loadingSpinner.classList.remove('hidden');
+                errorMessage.classList.add('hidden');
+                
+                fetch(apiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        displayData(data);
+                        loadingSpinner.classList.add('hidden');
+                    })
+                    .catch(error => {
+                        console.error('Error fetching data:', error);
+                        showError(`Error fetching data: ${error.message}`);
+                        loadingSpinner.classList.add('hidden');
+                    });
+            }
+            
+            function fetchDataWithSearch(searchTerm) {
+                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/rust";
+                const apiUrl = `${baseUrl}?query=search&term=${encodeURIComponent(searchTerm)}`;
+                
+                // Show loading spinner
+                loadingSpinner.classList.remove('hidden');
+                errorMessage.classList.add('hidden');
+                
+                fetch(apiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        displayData(data);
+                        loadingSpinner.classList.add('hidden');
+                    })
+                    .catch(error => {
+                        console.error('Error fetching data:', error);
+                        showError(`Error fetching data: ${error.message}`);
+                        loadingSpinner.classList.add('hidden');
+                    });
+            }
+
+            function displayData(data) {
+                // Clear previous results
+                tableHeader.innerHTML = '';
+                tableBody.innerHTML = '';
+                
+                if (!data || (Array.isArray(data) && data.length === 0)) {
+                    noData.style.display = 'block';
+                    return;
+                }
+
+                noData.style.display = 'none';
+                
+                // Handle both array of objects and single object responses
+                const items = Array.isArray(data) ? data : [data];
+                
+                if (items.length > 0) {
+                    // Create table headers based on the first item's keys
+                    const firstItem = items[0];
+                    // Filter out the ID column (case insensitive)
+                    const headers = Object.keys(firstItem).filter(header => 
+                        header.toUpperCase() !== 'ID' && 
+                        header.toLowerCase() !== 'id'
+                    );
+                    
+                    headers.forEach(header => {
+                        const th = document.createElement('th');
+                        th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+                        th.textContent = header;
+                        tableHeader.appendChild(th);
+                    });
+                    
+                    // Create table rows
+                    items.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.className = 'hover:bg-gray-50';
+                        
+                        headers.forEach(header => {
+                            const td = document.createElement('td');
+                            td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                            
+                            // Handle different data types
+                            const value = item[header];
+                            if (value === null || value === undefined) {
+                                td.textContent = '-';
+                            } else if (typeof value === 'object') {
+                                td.textContent = JSON.stringify(value);
+                            } else {
+                                td.textContent = value.toString();
+                            }
+                            
+                            row.appendChild(td);
+                        });
+                        
+                        tableBody.appendChild(row);
+                    });
+                }
+            }
+
+            function clearResults() {
+                tableHeader.innerHTML = '';
+                tableBody.innerHTML = '';
+                noData.textContent = 'No data';
+                noData.style.display = 'block';
+                errorMessage.classList.add('hidden');
+            }
+
+            function showError(message) {
+                errorText.textContent = message;
+                errorMessage.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
