@@ -32,17 +32,6 @@ export class DistributedQueryStack extends cdk.Stack {
       resources: ["*"]
     }));
 
-    // Python Read function
-    // const pythonRead = new lambda.Function(this, 'pythonRead', {
-    //   runtime: lambda.Runtime.PYTHON_3_9,
-    //   handler: 'lambda_function.lambda_handler',
-    //   code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/python/python_read')),
-    //   timeout: cdk.Duration.seconds(30),
-    //   memorySize: 256,
-    //   environment: {
-    //     CLUSTER_ENDPOINT: clusterEndpoint
-    //   }
-    // });
     const pythonRead = new PythonFunction(this, 'pythonRead', {
       runtime: lambda.Runtime.PYTHON_3_9,
       handler: 'lambda_handler',

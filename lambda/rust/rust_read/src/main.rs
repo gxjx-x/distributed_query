@@ -28,10 +28,7 @@ async fn main() -> Result<(), Error> {
     let password_token = signer
         .db_connect_admin_auth_token(&sdk_config)
         .await
-        .unwrap();
-
-
-    println!("DEBUG:{:?}", password_token.as_str());
+        .unwrap(); // If it cannot get it, fail
 
     // Setup connections
     let connection_options = PgConnectOptions::new()
@@ -41,9 +38,7 @@ async fn main() -> Result<(), Error> {
         .username("admin")
         .password(password_token.as_str())
         .ssl_mode(sqlx::postgres::PgSslMode::VerifyFull);
-    println!("CONN DEBUG:{:?}", connection_options);
 
-    // FIX: This is where it fails
     let pool = PgPoolOptions::new()
         .max_connections(1)
         .acquire_timeout(Duration::from_secs(10))
@@ -55,7 +50,6 @@ async fn main() -> Result<(), Error> {
         })?;
 
     let shared = &pool;
-    println!("SHARED DEBUG:{:?}", shared);
 
     //run(service_fn(function_handler)).await
     run(service_fn(|event| function_handler(shared, event))).await
