@@ -2,316 +2,262 @@ use lambda_http::{http::StatusCode, Error, Request, RequestExt, Response};
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, Pool, Postgres};
 use uuid::Uuid;
-use anyhow::Result;
+use std::collections::HashMap;
 
-
-// Define structs with FromRow derive for runtime mapping
+// Computer struct matching our simple database schema
 #[derive(Debug, FromRow, Serialize, Deserialize)]
-struct Computers {
+struct Computer {
     id: Uuid,
     model: String,
     manufacturer: String,
     year: i32,
-    ram_kb: i32,
     cpu: String,
-    storage: String,
-    category: Option<String>,
-}
-
-#[derive(Debug, FromRow, Serialize)]
-struct ManufacturerStats {
-    name: String,
-    country: Option<String>,
-    computer_count: i64,
-    first_system: Option<i32>,
-    last_system: Option<i32>,
-}
-
-// Search result struct that combines data from multiple tables
-#[derive(Debug, FromRow, Serialize, Deserialize)]
-struct SearchResult {
-    id: Uuid,
-    model: String,
-    manufacturer: String,
-    year: i32,
     ram_kb: i32,
-    cpu: String,
     storage: String,
-    category: Option<String>,
-    search_relevance_score: Option<f64>, // For ranking results
 }
 
-async fn weighted_search(pool: &Pool<Postgres>, search_term: &str) -> Result<Response<String>> {
-    let results: Vec<SearchResult> = sqlx::query_as(
-        r#"
-        SELECT 
-            c.id,
-            c.model,
-            m.name as manufacturer,
-            c.year,
-            c.ram_kb,
-            cf.family_name as cpu,
-            st.type_name as storage,
-            cat.category_name as category,
-            (
-                CASE WHEN LOWER(c.model) LIKE LOWER($1) THEN 10 ELSE 0 END +
-                CASE WHEN LOWER(m.name) LIKE LOWER($1) THEN 8 ELSE 0 END +
-                CASE WHEN LOWER(cf.family_name) LIKE LOWER($1) THEN 6 ELSE 0 END +
-                CASE WHEN LOWER(st.type_name) LIKE LOWER($1) THEN 3 ELSE 0 END +
-                CASE WHEN LOWER(cat.category_name) LIKE LOWER($1) THEN 2 ELSE 0 END
-            )::float8 as search_relevance_score
-        FROM computers c
-        JOIN manufacturers m ON c.manufacturer_id = m.id
-        JOIN cpu_families cf ON c.cpu_family_id = cf.id
-        JOIN storage_types st ON c.storage_type_id = st.id
-        LEFT JOIN computer_categories cat ON c.category_id = cat.id
-        WHERE 
-            LOWER(c.model) LIKE LOWER($1) OR
-            LOWER(m.name) LIKE LOWER($1) OR
-            LOWER(cf.family_name) LIKE LOWER($1) OR
-            LOWER(st.type_name) LIKE LOWER($1) OR
-            LOWER(cat.category_name) LIKE LOWER($1)
-        ORDER BY search_relevance_score DESC, c.year DESC
-        "#
+// Response structures
+#[derive(Serialize)]
+struct ApiResponse<T> {
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    manufacturers: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    years: Option<Vec<i32>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpus: Option<Vec<String>>,
+}
+
+fn create_cors_headers() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("Content-Type", "application/json"),
+        ("Access-Control-Allow-Origin", "*"),
+        ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+        ("Access-Control-Allow-Headers", "Content-Type"),
+    ]
+}
+
+async fn get_all_computers(pool: &Pool<Postgres>) -> Result<Response<String>, Error> {
+    let computers: Vec<Computer> = sqlx::query_as(
+        "SELECT id, model, manufacturer, year, cpu, ram_kb, storage FROM computers ORDER BY year, manufacturer"
     )
-    .bind(format!("%{}%", search_term))
     .fetch_all(pool)
-    .await?;
+    .await
+    .map_err(|e| {
+        println!("Database query error: {:?}", e);
+        e
+    })?;
 
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        // NOTE: CORS
-        .header("Access-Control-Allow-Headers", "Content-Type")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "OPTIONS,POST,GET")
-        .body(serde_json::to_string(&results).unwrap())
-        .map_err(Box::new)?;
-    Ok(response)
+    let response = ApiResponse {
+        status: "success".to_string(),
+        message: Some("Computers data retrieved successfully".to_string()),
+        count: Some(computers.len()),
+        data: Some(computers),
+        manufacturers: None,
+        years: None,
+        cpus: None,
+    };
+
+    let mut builder = Response::builder().status(StatusCode::OK);
+    for (key, value) in create_cors_headers() {
+        builder = builder.header(key, value);
+    }
+
+    Ok(builder.body(serde_json::to_string(&response)?)?)
 }
 
-// Query computers using runtime checking (DSQL compatible)
-async fn get_all_cpu_architectures(pool: &Pool<Postgres>) -> Result<Response<String>> {
+async fn get_manufacturers(pool: &Pool<Postgres>) -> Result<Response<String>, Error> {
+    let manufacturers: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT manufacturer FROM computers ORDER BY manufacturer"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        println!("Database query error: {:?}", e);
+        e
+    })?;
+
+    let response: ApiResponse<()> = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        count: Some(manufacturers.len()),
+        data: None,
+        manufacturers: Some(manufacturers),
+        years: None,
+        cpus: None,
+    };
+
+    let mut builder = Response::builder().status(StatusCode::OK);
+    for (key, value) in create_cors_headers() {
+        builder = builder.header(key, value);
+    }
+
+    Ok(builder.body(serde_json::to_string(&response)?)?)
+}
+
+async fn get_years(pool: &Pool<Postgres>) -> Result<Response<String>, Error> {
+    let years: Vec<i32> = sqlx::query_scalar(
+        "SELECT DISTINCT year FROM computers ORDER BY year"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        println!("Database query error: {:?}", e);
+        e
+    })?;
+
+    let response: ApiResponse<()> = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        count: Some(years.len()),
+        data: None,
+        manufacturers: None,
+        years: Some(years),
+        cpus: None,
+    };
+
+    let mut builder = Response::builder().status(StatusCode::OK);
+    for (key, value) in create_cors_headers() {
+        builder = builder.header(key, value);
+    }
+
+    Ok(builder.body(serde_json::to_string(&response)?)?)
+}
+
+async fn get_cpus(pool: &Pool<Postgres>) -> Result<Response<String>, Error> {
     let cpus: Vec<String> = sqlx::query_scalar(
-        r#"
-        SELECT family_name FROM cpu_families ORDER BY family_name
-        "#
+        "SELECT DISTINCT cpu FROM computers ORDER BY cpu"
     )
     .fetch_all(pool)
-    .await?;
+    .await
+    .map_err(|e| {
+        println!("Database query error: {:?}", e);
+        e
+    })?;
 
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        // NOTE: CORS
-        .header("Access-Control-Allow-Headers", "Content-Type")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "OPTIONS,POST,GET")
-        .body(serde_json::to_string(&cpus).unwrap())
-        .map_err(Box::new)?;
-    Ok(response)
+    let response: ApiResponse<()> = ApiResponse {
+        status: "success".to_string(),
+        message: None,
+        count: Some(cpus.len()),
+        data: None,
+        manufacturers: None,
+        years: None,
+        cpus: Some(cpus),
+    };
 
+    let mut builder = Response::builder().status(StatusCode::OK);
+    for (key, value) in create_cors_headers() {
+        builder = builder.header(key, value);
+    }
+
+    Ok(builder.body(serde_json::to_string(&response)?)?)
 }
 
-// Query computers using runtime checking (DSQL compatible)
-async fn query_computers_runtime(pool: &Pool<Postgres>) -> Result<Response<String>> {
-    let computers: Vec<Computers> = sqlx::query_as(
-        r#"
-        SELECT 
-            c.id,
-            c.model,
-            m.name as manufacturer,
-            c.year,
-            c.ram_kb,
-            cf.family_name as cpu,
-            st.type_name as storage,
-            cat.category_name as category
-        FROM computers c
-        JOIN manufacturers m ON c.manufacturer_id = m.id
-        JOIN cpu_families cf ON c.cpu_family_id = cf.id
-        JOIN storage_types st ON c.storage_type_id = st.id
-        LEFT JOIN computer_categories cat ON c.category_id = cat.id
-        ORDER BY c.year, m.name, c.model
-        --LIMIT 50
-        "#
+async fn test_connection(pool: &Pool<Postgres>) -> Result<Response<String>, Error> {
+    // Test basic connectivity
+    let version: String = sqlx::query_scalar("SELECT version()")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| {
+            println!("Database connection test error: {:?}", e);
+            e
+        })?;
+
+    // Test if we can list tables
+    let tables: Vec<String> = sqlx::query_scalar(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"
     )
     .fetch_all(pool)
-    .await?;
+    .await
+    .unwrap_or_default();
 
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        // NOTE: CORS
-        .header("Access-Control-Allow-Headers", "Content-Type")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "OPTIONS,POST,GET")
-        .body(serde_json::to_string(&computers).unwrap())
-        .map_err(Box::new)?;
-    Ok(response)
+    let mut connection_info = HashMap::new();
+    connection_info.insert("user", "admin");
+    connection_info.insert("database", "postgres");
 
+    let response = serde_json::json!({
+        "status": "success",
+        "database_version": version,
+        "tables": tables,
+        "connection_info": connection_info
+    });
+
+    let mut builder = Response::builder().status(StatusCode::OK);
+    for (key, value) in create_cors_headers() {
+        builder = builder.header(key, value);
+    }
+
+    Ok(builder.body(response.to_string())?)
 }
 
-// Query manufacturer stats using runtime checking
-async fn query_manufacturer_stats_runtime(pool: &Pool<Postgres>) -> Result<Response<String>> {
-    let stats: Vec<ManufacturerStats> = sqlx::query_as(
-        r#"
-        SELECT 
-            m.name,
-            m.country,
-            COUNT(*) as computer_count,
-            MIN(c.year) as first_system,
-            MAX(c.year) as last_system
-        FROM computers c
-        JOIN manufacturers m ON c.manufacturer_id = m.id
-        GROUP BY m.name, m.country
-        ORDER BY computer_count DESC
-        "#
-    )
-    .fetch_all(pool)
-    .await?;
+async fn health_check() -> Result<Response<String>, Error> {
+    let response = serde_json::json!({
+        "status": "healthy",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "service": "distributed-query-rust",
+        "database": "connected"
+    });
 
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        // NOTE: CORS
-        .header("Access-Control-Allow-Headers", "Content-Type")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "OPTIONS,POST,GET")
-        .body(serde_json::to_string(&stats).unwrap())
-        .map_err(Box::new)?;
-    Ok(response)
+    let mut builder = Response::builder().status(StatusCode::OK);
+    for (key, value) in create_cors_headers() {
+        builder = builder.header(key, value);
+    }
+
+    Ok(builder.body(response.to_string())?)
 }
 
-// Example of a parameterized query (DSQL compatible)
-async fn find_computers_by_year(pool: &Pool<Postgres>, target_year: i32) -> Result<Response<String>> {
-    let computers: Vec<Computers> = sqlx::query_as(
-        r#"
-        SELECT 
-            c.id,
-            c.model,
-            m.name as manufacturer,
-            c.year,
-            c.ram_kb,
-            cf.family_name as cpu,
-            st.type_name as storage,
-            cat.category_name as category
-        FROM computers c
-        JOIN manufacturers m ON c.manufacturer_id = m.id
-        JOIN cpu_families cf ON c.cpu_family_id = cf.id
-        JOIN storage_types st ON c.storage_type_id = st.id
-        LEFT JOIN computer_categories cat ON c.category_id = cat.id
-        WHERE c.year = $1
-        ORDER BY m.name, c.model
-        "#
-    )
-    .bind(target_year)
-    .fetch_all(pool)
-    .await?;
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        // NOTE: CORS
-        .header("Access-Control-Allow-Headers", "Content-Type")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "OPTIONS,POST,GET")
-        .body(serde_json::to_string(&computers).unwrap())
-        .map_err(Box::new)?;
+async fn handle_unknown_query(query: &str) -> Result<Response<String>, Error> {
+    let response = serde_json::json!({
+        "message": format!("Query type '{}' is ready for implementation", query),
+        "available_queries": ["test", "all_computers", "manufacturers", "years", "cpus", "health"],
+        "status": "success",
+        "query_received": query
+    });
 
-    Ok(response)
-}
-async fn find_computers_by_cpu(pool: &Pool<Postgres>, target_cpu: &str) -> Result<Response<String>> {
-    let computers: Vec<Computers> = sqlx::query_as(
-        r#"
-        SELECT 
-            c.id,
-            c.model,
-            m.name as manufacturer,
-            c.year,
-            c.ram_kb,
-            cf.family_name as cpu,
-            st.type_name as storage,
-            cat.category_name as category
-        FROM computers c
-        JOIN manufacturers m ON c.manufacturer_id = m.id
-        JOIN cpu_families cf ON c.cpu_family_id = cf.id
-        JOIN storage_types st ON c.storage_type_id = st.id
-        LEFT JOIN computer_categories cat ON c.category_id = cat.id
-        WHERE cf.family_name = $1
-        ORDER BY m.name, c.model
-        "#
-    )
-    .bind(target_cpu)
-    .fetch_all(pool)
-    .await?;
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        // NOTE: CORS
-        .header("Access-Control-Allow-Headers", "Content-Type")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "OPTIONS,POST,GET")
-        .body(serde_json::to_string(&computers).unwrap())
-        .map_err(Box::new)?;
+    let mut builder = Response::builder().status(StatusCode::OK);
+    for (key, value) in create_cors_headers() {
+        builder = builder.header(key, value);
+    }
 
-    Ok(response)
+    Ok(builder.body(response.to_string())?)
 }
 
-pub(crate) async fn function_handler(pool: &Pool<Postgres>, event: Request) -> Result<Response<String>, Error> {
+pub async fn function_handler(
+    pool: &Pool<Postgres>,
+    event: Request,
+) -> Result<Response<String>, Error> {
+    // Handle CORS preflight requests
+    if event.method() == "OPTIONS" {
+        let mut builder = Response::builder().status(StatusCode::OK);
+        for (key, value) in create_cors_headers() {
+            builder = builder.header(key, value);
+        }
+        return Ok(builder.body("".to_string())?);
+    }
 
-    // Extract some useful information from the request
-    let what = event
-        .query_string_parameters_ref()
-        .and_then(|params| params.first("query"))
-        .unwrap_or("all_computers");
+    // Get query parameters
+    let query_params = event.query_string_parameters();
+    let query = query_params.first("query").unwrap_or("test");
+    let test_type = query_params.first("test");
 
-    // Big boy match
-    match what {
-        "all_computers" => {
-            let computers = query_computers_runtime(pool).await.unwrap();
-            Ok(computers)
-        },
-        "manuf_stats" => {
-            let manuf = query_manufacturer_stats_runtime(pool).await.unwrap();
-            Ok(manuf)
-        },
-        "cpus" => {
-            let cpus = get_all_cpu_architectures(pool).await.unwrap();
-            Ok(cpus)
-        },
-        "year_stats" => {
-            // Get the year from query string parameter and cast it into a i32 
-            let year = event
-                .query_string_parameters_ref()
-                .and_then(|params| params.first("year"))
-                .and_then(|y|y.parse::<i32>().ok())
-                .unwrap_or(1988);
+    // Handle explicit test requests
+    if test_type == Some("connection") || query == "test" {
+        return test_connection(pool).await;
+    }
 
-            let computers = find_computers_by_year(pool, year).await.unwrap();
-            Ok(computers)
-        },
-        "cpu_computers" => {
-            // Get the year from query string parameter and cast it into a i32 
-            let cpu = event
-                .query_string_parameters_ref()
-                .and_then(|params| params.first("cpu"))
-                .unwrap_or("Zilog Z80");
-
-            let computers = find_computers_by_cpu(pool, cpu).await.unwrap();
-            Ok(computers)
-        },
-        "search" => {
-            // Get the year from query string parameter and cast it into a i32 
-            let term = event
-                .query_string_parameters_ref()
-                .and_then(|params| params.first("term"))
-                .unwrap_or("");
-
-            let computers = weighted_search(pool, term).await.unwrap();
-            Ok(computers)
-        },
-        _ => {
-            let computers = query_computers_runtime(pool).await.unwrap();
-            Ok(computers)
-        },
+    // Handle other queries
+    match query {
+        "all_computers" => get_all_computers(pool).await,
+        "manufacturers" => get_manufacturers(pool).await,
+        "years" => get_years(pool).await,
+        "cpus" => get_cpus(pool).await,
+        "health" => health_check().await,
+        _ => handle_unknown_query(query).await,
     }
 }

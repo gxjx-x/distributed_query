@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toggle Debug Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow">
+        <h1 class="text-xl font-bold mb-4">Toggle Debug Test</h1>
+        
+        <!-- Toggle Switch -->
+        <div class="mb-4">
+            <label for="toggle-rust-python" class="inline-flex items-center cursor-pointer">
+                <span class="mr-3 text-sm font-medium text-orange-500">🦀 Rust</span>
+                <div class="relative">
+                    <input type="checkbox" id="toggle-rust-python" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </div>
+                <span class="ml-3 text-sm font-medium text-blue-600">🐍 Python</span>
+            </label>
+        </div>
+        
+        <!-- Status Display -->
+        <div class="mb-4">
+            <span class="text-sm text-gray-700">Current Backend:</span>
+            <span id="backend-status" class="ml-2 px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">🦀 Rust</span>
+        </div>
+        
+        <!-- Debug Info -->
+        <div class="mb-4 p-3 bg-gray-100 rounded">
+            <div class="text-sm">
+                <div>Toggle Checked: <span id="toggle-state">false</span></div>
+                <div>Backend URL: <span id="backend-url">-</span></div>
+                <div>Last API Call: <span id="last-api-call">-</span></div>
+            </div>
+        </div>
+        
+        <!-- Test Button -->
+        <button id="test-api" class="bg-blue-500 hover:bg-blue-700 text-white px-4 py-2 rounded">
+            Test API Call
+        </button>
+        
+        <!-- Results -->
+        <div id="results" class="mt-4 p-3 bg-gray-50 rounded text-sm">
+            Click "Test API Call" to see results
+        </div>
+    </div>
+
+    <script>
+        const toggleRustPython = document.getElementById('toggle-rust-python');
+        const backendStatus = document.getElementById('backend-status');
+        const toggleState = document.getElementById('toggle-state');
+        const backendUrl = document.getElementById('backend-url');
+        const lastApiCall = document.getElementById('last-api-call');
+        const testButton = document.getElementById('test-api');
+        const results = document.getElementById('results');
+
+        function updateStatus() {
+            const isRust = !toggleRustPython.checked;
+            
+            // Update status indicator
+            if (isRust) {
+                backendStatus.textContent = '🦀 Rust';
+                backendStatus.className = 'ml-2 px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800';
+            } else {
+                backendStatus.textContent = '🐍 Python';
+                backendStatus.className = 'ml-2 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800';
+            }
+            
+            // Update debug info
+            toggleState.textContent = toggleRustPython.checked;
+            backendUrl.textContent = getBaseUrl();
+        }
+
+        function getBaseUrl() {
+            const isRust = !toggleRustPython.checked;
+            const baseUrl = "https://zg7r2kuw2c.execute-api.us-east-1.amazonaws.com/prod/read/";
+            return baseUrl + (isRust ? "rust" : "python");
+        }
+
+        function testAPI() {
+            const apiUrl = `${getBaseUrl()}?query=manufacturers`;
+            lastApiCall.textContent = apiUrl;
+            results.textContent = 'Loading...';
+            
+            fetch(apiUrl)
+                .then(response => response.json())
+                .then(data => {
+                    results.textContent = JSON.stringify(data, null, 2);
+                })
+                .catch(error => {
+                    results.textContent = 'Error: ' + error.message;
+                });
+        }
+
+        // Event listeners
+        toggleRustPython.addEventListener('change', updateStatus);
+        testButton.addEventListener('click', testAPI);
+        
+        // Initialize
+        updateStatus();
+    </script>
+</body>
+</html>

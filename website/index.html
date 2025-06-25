@@ -17,13 +17,19 @@
             <div class="mt-4 flex items-center">
                 <span class="mr-3 text-sm font-medium text-gray-700">Implementation:</span>
                 <label for="toggle-rust-python" class="inline-flex items-center cursor-pointer">
-                    <span class="mr-3 text-sm font-medium text-orange-500">Rust</span>
+                    <span class="mr-3 text-sm font-medium text-orange-500">🦀 Rust</span>
                     <div class="relative">
                         <input type="checkbox" id="toggle-rust-python" class="sr-only peer">
-                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 cursor-pointer"></div>
                     </div>
-                    <span class="ml-3 text-sm font-medium text-blue-600">Python</span>
+                    <span class="ml-3 text-sm font-medium text-blue-600">🐍 Python</span>
                 </label>
+            </div>
+            
+            <!-- Backend Status Indicator -->
+            <div class="mt-2 flex items-center">
+                <span class="text-xs text-gray-500">Current Backend:</span>
+                <span id="backend-status" class="ml-2 px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800">🦀 Rust</span>
             </div>
         </header>
 
@@ -153,6 +159,9 @@
             
             // Add event listener for the toggle switch
             toggleRustPython.addEventListener('change', () => {
+                console.log('Toggle changed! New state:', toggleRustPython.checked);
+                updateBackendStatus();
+                
                 // Refresh the current view with the new implementation
                 if (yearSelect.value) {
                     fetchDataWithQueryAndYear('year_stats', yearSelect.value);
@@ -168,14 +177,62 @@
                 fetchCPUArchitectures();
             });
 
+            // Add backup click handler to the toggle div itself
+            const toggleDiv = document.querySelector('.w-11.h-6.bg-gray-200');
+            if (toggleDiv) {
+                toggleDiv.addEventListener('click', (e) => {
+                    console.log('Toggle div clicked!');
+                    e.preventDefault();
+                    toggleRustPython.checked = !toggleRustPython.checked;
+                    toggleRustPython.dispatchEvent(new Event('change'));
+                });
+            }
+
+            // Add click handler to the entire label as backup
+            const toggleLabel = document.querySelector('label[for="toggle-rust-python"]');
+            if (toggleLabel) {
+                toggleLabel.addEventListener('click', (e) => {
+                    console.log('Toggle label clicked!');
+                    // Let the default behavior handle this, but log it
+                });
+            }
+
+            // Function to update backend status indicator
+            function updateBackendStatus() {
+                const backendStatus = document.getElementById('backend-status');
+                const isRust = !toggleRustPython.checked; // Unchecked = Rust, Checked = Python
+                
+                if (isRust) {
+                    backendStatus.textContent = '🦀 Rust';
+                    backendStatus.className = 'ml-2 px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800';
+                } else {
+                    backendStatus.textContent = '🐍 Python';
+                    backendStatus.className = 'ml-2 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800';
+                }
+            }
+
+            // Initialize backend status on page load
+            updateBackendStatus();
+
             // Automatically fetch all computers data when the page loads
-            fetchDataWithQuery('all_computers');
+            // Add a small delay to ensure toggle is properly initialized
+            setTimeout(() => {
+                fetchDataWithQuery('all_computers');
+            }, 100);
 
             function getBaseUrl() {
                 // Return the appropriate base URL based on the toggle state
-                const isPython = toggleRustPython.checked;
-                const baseUrl = "https://9b12qt2pl0.execute-api.us-west-2.amazonaws.com/prod/read/";
-                return baseUrl + (isPython ? "python" : "rust");
+                const isRust = !toggleRustPython.checked; // Unchecked = Rust, Checked = Python
+                const baseUrl = "https://zg7r2kuw2c.execute-api.us-east-1.amazonaws.com/prod/read/";
+                const backend = isRust ? "rust" : "python";
+                
+                // Debug logging
+                console.log('Toggle checked:', toggleRustPython.checked);
+                console.log('Is Rust:', isRust);
+                console.log('Backend:', backend);
+                console.log('Full URL:', baseUrl + backend);
+                
+                return baseUrl + backend;
             }
 
             function fetchCPUArchitectures() {

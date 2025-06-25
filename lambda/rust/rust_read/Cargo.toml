@@ -5,8 +5,7 @@ edition = "2021"
 
 [dependencies]
 lambda_http = "0.13.0"
-
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
 aws-config = { version = "1.6.3", features = ["behavior-version-latest"] }
 aws-sdk-dsql = "1.25.0"
 tokio = { version = "1.0", features = ["full"] }
