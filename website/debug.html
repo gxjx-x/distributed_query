@@ -76,7 +76,7 @@
 
         function getBaseUrl() {
             const isRust = !toggleRustPython.checked;
-            const baseUrl = "https://zg7r2kuw2c.execute-api.us-east-1.amazonaws.com/prod/read/";
+            const baseUrl = "{{API_GATEWAY_URL}}";
             return baseUrl + (isRust ? "rust" : "python");
         }
 

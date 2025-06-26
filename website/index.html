@@ -223,7 +223,7 @@
             function getBaseUrl() {
                 // Return the appropriate base URL based on the toggle state
                 const isRust = !toggleRustPython.checked; // Unchecked = Rust, Checked = Python
-                const baseUrl = "https://zg7r2kuw2c.execute-api.us-east-1.amazonaws.com/prod/read/";
+                const baseUrl = "{{API_GATEWAY_URL}}";
                 const backend = isRust ? "rust" : "python";
                 
                 // Debug logging

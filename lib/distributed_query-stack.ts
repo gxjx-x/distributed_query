@@ -118,10 +118,101 @@ export class DistributedQueryStack extends cdk.Stack {
     });
 
     // Deploy website content to S3
-    new s3deploy.BucketDeployment(this, 'DeployWebsite', {
+    const websiteDeployment = new s3deploy.BucketDeployment(this, 'DeployWebsite', {
       sources: [s3deploy.Source.asset(path.join(__dirname, '../website'))],
       destinationBucket: websiteBucket,
     });
+
+    // Create a custom resource to update website files with the API Gateway URL
+    const updateWebsiteFunction = new lambda.Function(this, 'UpdateWebsiteFunction', {
+      runtime: lambda.Runtime.PYTHON_3_9,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
+import boto3
+import json
+import urllib3
+
+def handler(event, context):
+    print(f"Event: {json.dumps(event)}")
+    
+    if event['RequestType'] == 'Delete':
+        send_response(event, context, 'SUCCESS', {})
+        return
+    
+    try:
+        s3 = boto3.client('s3')
+        bucket_name = event['ResourceProperties']['BucketName']
+        api_gateway_url = event['ResourceProperties']['ApiGatewayUrl']
+        
+        # List of files to update
+        files_to_update = ['index.html', 'debug.html']
+        
+        for file_name in files_to_update:
+            try:
+                # Download the file
+                response = s3.get_object(Bucket=bucket_name, Key=file_name)
+                content = response['Body'].read().decode('utf-8')
+                
+                # Replace the placeholder with the actual API Gateway URL
+                updated_content = content.replace('{{API_GATEWAY_URL}}', api_gateway_url)
+                
+                # Upload the updated file back to S3
+                s3.put_object(
+                    Bucket=bucket_name,
+                    Key=file_name,
+                    Body=updated_content.encode('utf-8'),
+                    ContentType='text/html'
+                )
+                print(f"Updated {file_name} with API Gateway URL: {api_gateway_url}")
+                
+            except Exception as e:
+                print(f"Error updating {file_name}: {str(e)}")
+                # Continue with other files even if one fails
+        
+        send_response(event, context, 'SUCCESS', {'Message': 'Website files updated successfully'})
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        send_response(event, context, 'FAILED', {'Message': str(e)})
+
+def send_response(event, context, response_status, response_data):
+    response_url = event['ResponseURL']
+    response_body = {
+        'Status': response_status,
+        'Reason': f'See CloudWatch Log Stream: {context.log_stream_name}',
+        'PhysicalResourceId': context.log_stream_name,
+        'StackId': event['StackId'],
+        'RequestId': event['RequestId'],
+        'LogicalResourceId': event['LogicalResourceId'],
+        'Data': response_data
+    }
+    
+    json_response_body = json.dumps(response_body)
+    headers = {'content-type': '', 'content-length': str(len(json_response_body))}
+    
+    http = urllib3.PoolManager()
+    response = http.request('PUT', response_url, body=json_response_body, headers=headers)
+    print(f"Response status: {response.status}")
+`),
+      timeout: cdk.Duration.minutes(5),
+    });
+
+    // Grant the Lambda function permissions to read and write to the S3 bucket
+    websiteBucket.grantReadWrite(updateWebsiteFunction);
+
+    // Create a custom resource that triggers the Lambda function
+    const updateWebsiteResource = new cdk.CustomResource(this, 'UpdateWebsiteResource', {
+      serviceToken: updateWebsiteFunction.functionArn,
+      properties: {
+        BucketName: websiteBucket.bucketName,
+        ApiGatewayUrl: `${api.url}read/`,
+        // Add a timestamp to force update on every deployment
+        Timestamp: Date.now().toString(),
+      },
+    });
+
+    // Ensure the custom resource runs after the website deployment
+    updateWebsiteResource.node.addDependency(websiteDeployment);
 
     // Create CloudFront distribution for the website
     const distribution = new cloudfront.Distribution(this, 'WebsiteDistribution', {
